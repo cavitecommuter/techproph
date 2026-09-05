@@ -1,0 +1,298 @@
+<!DOCTYPE html>
+<html lang="en" class="scroll-smooth">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TechPro PH | IT Infrastructure & Web Development</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Firebase SDKs -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
+        import { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
+        import { getFirestore, doc, getDoc, setDoc, collection, addDoc, getDocs } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+
+        // TODO: Replace with your own Firebase project configuration credentials
+        const firebaseConfig = {
+            apiKey: "YOUR_API_KEY",
+            authDomain: "YOUR_AUTH_DOMAIN",
+            projectId: "YOUR_PROJECT_ID",
+            storageBucket: "YOUR_STORAGE_BUCKET",
+            messagingSenderId: "YOUR_MESSAGING_SENDER_ID",
+            appId: "YOUR_APP_ID"
+        };
+
+        const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
+        const db = getFirestore(app);
+
+        // Expose functions globally for UI interaction
+        window.db = db;
+        window.auth = auth;
+        window.signInWithEmailAndPassword = signInWithEmailAndPassword;
+        window.signOut = signOut;
+        window.doc = doc;
+        window.getDoc = getDoc;
+        window.setDoc = setDoc;
+        window.addDoc = addDoc;
+        window.collection = collection;
+
+        // Check Auth State & Load Content
+        onAuthStateChanged(auth, (user) => {
+            const adminPanel = document.getElementById('admin-panel');
+            const adminTriggerBtn = document.getElementById('admin-trigger-btn');
+            if (user) {
+                adminPanel.classList.remove('hidden');
+                adminTriggerBtn.innerText = "Admin Logout";
+                adminTriggerBtn.onclick = () => signOut(auth);
+                loadEditableContent();
+            } else {
+                adminPanel.classList.add('hidden');
+                adminTriggerBtn.innerText = "Admin Login";
+                adminTriggerBtn.onclick = () => document.getElementById('login-modal').classList.remove('hidden');
+            }
+        });
+
+        async function loadEditableContent() {
+            try {
+                const docSnap = await getDoc(doc(db, "content", "portfolio"));
+                if (docSnap.exists()) {
+                    const data = docSnap.data();
+                    document.getElementById('display-hero-title').innerText = data.heroTitle || "Bridging Physical IT Hardware & Digital Web Applications";
+                    document.getElementById('input-hero-title').value = data.heroTitle || "";
+                }
+            } catch (e) {
+                console.log("Error loading content, using defaults:", e);
+            }
+        }
+
+        window.saveChanges = async function() {
+            const newTitle = document.getElementById('input-hero-title').value;
+            await setDoc(doc(db, "content", "portfolio"), { heroTitle: newTitle }, { merge: true });
+            alert("Changes saved successfully to Firebase!");
+            location.reload();
+        }
+
+        window.handleLogin = async function(e) {
+            e.preventDefault();
+            const email = document.getElementById('login-email').value;
+            const pass = document.getElementById('login-pass').value;
+            try {
+                await signInWithEmailAndPassword(auth, email, pass);
+                document.getElementById('login-modal').classList.add('hidden');
+            } catch (err) {
+                alert("Login failed: " + err.message);
+            }
+        }
+
+        window.handleContactSubmit = async function(e) {
+            e.preventDefault();
+            const name = document.getElementById('contact-name').value;
+            const email = document.getElementById('contact-email').value;
+            const service = document.getElementById('contact-service').value;
+            const message = document.getElementById('contact-msg').value;
+
+            try {
+                await addDoc(collection(db, "inquiries"), { 
+                    name, 
+                    email, 
+                    service, 
+                    message, 
+                    timestamp: new Date(),
+                    delivery: {
+                        to: ["jonfernandez090@gmail.com"],
+                        message: {
+                            subject: `New Service Inquiry from ${name} (${service})`,
+                            text: `You received a new inquiry.\n\nName: ${name}\nEmail: ${email}\nService: ${service}\nMessage: ${message}`
+                        }
+                    }
+                });
+                alert("Request submitted successfully! We will get back to you shortly.");
+                e.target.reset();
+            } catch (err) {
+                alert("Error sending message: " + err.message);
+            }
+        }
+
+        window.onload = loadEditableContent;
+    </script>
+</head>
+<body class="bg-slate-950 text-slate-100 font-sans antialiased">
+
+    <!-- NAVBAR -->
+    <header class="sticky top-0 z-50 bg-slate-950/80 backdrop-blur border-b border-slate-800">
+        <div class="max-w-7xl mx-auto px-6 h-20 flex items-center justify-between">
+            <a href="#" class="text-2xl font-black tracking-tight text-cyan-400">TechPro<span class="text-white">PH</span></a>
+            <nav class="hidden md:flex items-center space-x-8 font-medium text-sm text-slate-300">
+                <a href="#services" class="hover:text-cyan-400 transition">Services</a>
+                <a href="#projects" class="hover:text-cyan-400 transition">Recent Projects</a>
+                <a href="#contact" class="hover:text-cyan-400 transition">Contact</a>
+                <button id="admin-trigger-btn" class="bg-slate-900 border border-slate-700 text-slate-300 hover:text-white px-3 py-1.5 rounded-lg text-xs font-semibold transition">Admin Login</button>
+            </nav>
+        </div>
+    </header>
+
+    <!-- ADMIN EDIT CONTROL PANEL -->
+    <div id="admin-panel" class="hidden bg-cyan-950/90 border-b border-cyan-800 py-4 px-6 sticky top-20 z-40">
+        <div class="max-w-7xl mx-auto flex flex-col md:flex-row items-center justify-between gap-4">
+            <span class="text-cyan-300 font-bold text-sm">🛠️ Admin Mode Active: Edit Content Below</span>
+            <div class="flex items-center gap-2 w-full md:w-auto">
+                <input type="text" id="input-hero-title" placeholder="Update Hero Title..." class="bg-slate-900 border border-cyan-700 rounded-lg px-3 py-1.5 text-xs text-white w-80">
+                <button onclick="saveChanges()" class="bg-cyan-500 hover:bg-cyan-400 text-slate-950 text-xs font-bold px-4 py-1.5 rounded-lg transition">Save to Firebase</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- LOGIN MODAL -->
+    <div id="login-modal" class="hidden fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+        <div class="bg-slate-900 border border-slate-800 p-8 rounded-2xl max-w-md w-full relative">
+            <button onclick="document.getElementById('login-modal').classList.add('hidden')" class="absolute top-4 right-4 text-slate-400 hover:text-white">✕</button>
+            <h3 class="text-xl font-bold mb-4">Admin Authentication</h3>
+            <form onsubmit="handleLogin(event)" class="space-y-4">
+                <div>
+                    <label class="block text-xs font-medium text-slate-300 mb-1">Admin Email</label>
+                    <input type="email" id="login-email" required class="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-sm text-white" value="jonfernandez090@gmail.com">
+                </div>
+                <div>
+                    <label class="block text-xs font-medium text-slate-300 mb-1">Password</label>
+                    <input type="password" id="login-pass" required class="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-sm text-white" value="P@sswordSantuza">
+                </div>
+                <button type="submit" class="w-full bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold py-2 rounded-lg text-sm transition">Login</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- HERO SECTION -->
+    <section class="relative py-24 md:py-32 overflow-hidden border-b border-slate-900">
+        <div class="max-w-7xl mx-auto px-6 text-center">
+            <span class="inline-block bg-cyan-950 text-cyan-400 text-xs font-semibold px-3 py-1 rounded-full border border-cyan-800/50 mb-6">Infrastructure & Software Engineering</span>
+            <h1 id="display-hero-title" class="text-4xl md:text-6xl font-black tracking-tight max-w-4xl mx-auto leading-tight mb-6">
+                Bridging Physical IT Hardware & Digital Web Applications
+            </h1>
+            <p class="text-lg md:text-xl text-slate-400 max-w-2xl mx-auto mb-10">
+                From home servers, CCTV security, and network repair to custom web apps and secure business email domains.
+            </p>
+        </div>
+    </section>
+
+    <!-- SERVICES GRID -->
+    <section id="services" class="py-24 bg-slate-900/40">
+        <div class="max-w-7xl mx-auto px-6">
+            <div class="text-center max-w-3xl mx-auto mb-16">
+                <h2 class="text-3xl font-bold tracking-tight mb-4">Comprehensive IT & Web Solutions</h2>
+            </div>
+            <div class="grid md:grid-cols-2 lg:grid-cols-3 gap-8">
+                <div class="bg-slate-900 border border-slate-800 p-8 rounded-2xl"><h3 class="text-xl font-bold mb-3">🖥️ Servers & Home Servers</h3><p class="text-slate-400 text-sm">Custom NAS setups, virtualization, media streaming, and backups.</p></div>
+                <div class="bg-slate-900 border border-slate-800 p-8 rounded-2xl"><h3 class="text-xl font-bold mb-3">📹 CCTV & Surveillance</h3><p class="text-slate-400 text-sm">Security camera installation and mobile remote viewing setup.</p></div>
+                <div class="bg-slate-900 border border-slate-800 p-8 rounded-2xl"><h3 class="text-xl font-bold mb-3">🌐 Network Repair & IT</h3><p class="text-slate-400 text-sm">Structured cabling, Wi-Fi optimization, and hardware troubleshooting.</p></div>
+                <div class="bg-slate-900 border border-slate-800 p-8 rounded-2xl"><h3 class="text-xl font-bold mb-3">💻 Web Applications</h3><p class="text-slate-400 text-sm">Custom modern web app development backed by secure cloud infrastructure.</p></div>
+                <div class="bg-slate-900 border border-slate-800 p-8 rounded-2xl"><h3 class="text-xl font-bold mb-3">✉️ Email Domain & Web</h3><p class="text-slate-400 text-sm">Business email configuration and responsive website design.</p></div>
+                <div class="bg-slate-900 border border-slate-800 p-8 rounded-2xl"><h3 class="text-xl font-bold mb-3">🚀 GitHub & Firebase</h3><p class="text-slate-400 text-sm">Cloud deployments, database structures, and automated workflows.</p></div>
+            </div>
+        </div>
+    </section>
+
+    <!-- RECENT PROJECTS SHOWCASE -->
+    <section id="projects" class="py-24 border-t border-slate-900">
+        <div class="max-w-7xl mx-auto px-6">
+            <div class="text-center max-w-3xl mx-auto mb-16">
+                <span class="text-cyan-400 text-xs font-semibold uppercase tracking-wider">Portfolio Showcase</span>
+                <h2 class="text-3xl font-bold tracking-tight mt-2 mb-4">Recent Projects</h2>
+                <p class="text-slate-400 text-sm">Real deployments spanning physical security surveillance, inventory systems, and reservation platforms.</p>
+            </div>
+            
+            <div class="grid lg:grid-cols-3 gap-8">
+                <!-- CCTV Project -->
+                <div class="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden flex flex-col">
+                    <div class="p-4 bg-slate-950 border-b border-slate-800">
+                        <span class="text-xs font-semibold text-cyan-400 bg-cyan-950 px-2.5 py-1 rounded-md border border-cyan-800/50">Physical Security</span>
+                        <h3 class="text-lg font-bold mt-2">Multi-Angle IP CCTV Installation</h3>
+                    </div>
+                    <div class="p-4 space-y-3 bg-slate-900/50 flex-1">
+                        <p class="text-xs text-slate-400">Deployed multi-channel high-definition cameras covering exterior property gateways, parking bays, and perimeter walkways with mobile remote viewing integration.</p>
+                        <div class="grid grid-cols-2 gap-2">
+                            <div class="rounded-lg overflow-hidden border border-slate-800"><img src="cctv.jpg" alt="CCTV View 1" class="w-full h-28 object-cover"></div>
+                            <div class="rounded-lg overflow-hidden border border-slate-800"><img src="cctv 2.jpg" alt="CCTV View 2" class="w-full h-28 object-cover"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Inventory System Project -->
+                <div class="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden flex flex-col">
+                    <div class="p-4 bg-slate-950 border-b border-slate-800">
+                        <span class="text-xs font-semibold text-cyan-400 bg-cyan-950 px-2.5 py-1 rounded-md border border-cyan-800/50">Web Application</span>
+                        <h3 class="text-lg font-bold mt-2">Tindahan Digital Inventory & Palista</h3>
+                    </div>
+                    <div class="p-4 space-y-3 bg-slate-900/50 flex-1 flex flex-col justify-between">
+                        <p class="text-xs text-slate-400">Complete dashboard tracking stock capital, low stock warnings, product profit margins, and automated customer digital credit ledger reminders.</p>
+                        <div class="rounded-lg overflow-hidden border border-slate-800 mt-2">
+                            <img src="0b7415c1-e86e-4afa-b294-5024d17f0423.jpg" alt="Inventory System" class="w-full h-44 object-cover">
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Booking App Project -->
+                <div class="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden flex flex-col">
+                    <div class="p-4 bg-slate-950 border-b border-slate-800">
+                        <span class="text-xs font-semibold text-cyan-400 bg-cyan-950 px-2.5 py-1 rounded-md border border-cyan-800/50">Web Application</span>
+                        <h3 class="text-lg font-bold mt-2">Rent-A-Car Booking & Reservation App</h3>
+                    </div>
+                    <div class="p-4 space-y-3 bg-slate-900/50 flex-1 flex flex-col justify-between">
+                        <p class="text-xs text-slate-400">Vehicle fleet reservation interface allowing customer booking selection, date management, and real-time ledger confirmation tracking.</p>
+                        <div class="rounded-lg overflow-hidden border border-slate-800 mt-2">
+                            <img src="ef907354-fada-42ba-883e-70141e5cf132.jpg" alt="Booking System" class="w-full h-44 object-cover">
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- CONTACT FORM SECTION -->
+    <section id="contact" class="py-24 border-t border-slate-900 bg-slate-900/20">
+        <div class="max-w-3xl mx-auto px-6">
+            <div class="text-center mb-12">
+                <h2 class="text-3xl font-bold tracking-tight mb-3">Get in Touch / Request a Service</h2>
+                <div class="flex flex-wrap items-center justify-center gap-6 mt-4 text-sm text-slate-300">
+                    <span class="flex items-center gap-2">📞 <a href="tel:09270724765" class="hover:text-cyan-400 transition font-medium">09270724765</a></span>
+                    <span class="flex items-center gap-2">💬 <a href="https://www.facebook.com/jonathan.fernandez.399041" target="_blank" class="text-cyan-400 hover:underline font-medium">Send me a DM on Facebook</a></span>
+                </div>
+            </div>
+            <form onsubmit="handleContactSubmit(event)" class="bg-slate-900 border border-slate-800 p-8 rounded-2xl space-y-6">
+                <div class="grid md:grid-cols-2 gap-6">
+                    <div>
+                        <label class="block text-sm font-medium text-slate-300 mb-2">Your Name</label>
+                        <input type="text" id="contact-name" required class="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-cyan-500">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-slate-300 mb-2">Email Address</label>
+                        <input type="email" id="contact-email" required class="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-cyan-500">
+                    </div>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-slate-300 mb-2">Service Required</label>
+                    <select id="contact-service" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-cyan-500">
+                        <option>Servers & Home Servers</option>
+                        <option>CCTV Installation</option>
+                        <option>Network Repair & IT Support</option>
+                        <option>Web Application Development</option>
+                        <option>Email Domain & Website Creation</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-slate-300 mb-2">Project Details / Message</label>
+                    <textarea id="contact-msg" required class="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-cyan-500 h-32 resize-none"></textarea>
+                </div>
+                <button type="submit" class="w-full bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold py-3.5 rounded-xl transition shadow-lg shadow-cyan-500/20">
+                    Submit Request
+                </button>
+            </form>
+        </div>
+    </section>
+
+    <!-- FOOTER -->
+    <footer class="bg-slate-950 border-t border-slate-900 py-8 text-center text-sm text-slate-500">
+        <p>&copy; 2026 TechPro PH. All rights reserved. Hosted on GitHub & Firebase.</p>
+    </footer>
+
+</body>
+</html>
